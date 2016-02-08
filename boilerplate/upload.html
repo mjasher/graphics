@@ -1,0 +1,140 @@
+<html>
+<head>
+    <style type="text/css">
+        /*thanks to http://littledice.me/2014/04/16/responsive-circles-with-css/*/
+         .circle {
+             margin-left: auto;
+             margin-right: auto;
+             border-radius: 50%;
+             width: 100%;
+             position: relative;
+             border: 2px solid #bbb;
+             cursor: pointer;
+         }
+         .circle:before {
+             content: "";
+             display: block;
+             padding-top: 100%;
+         }
+         .circle-inner {
+             position: absolute;
+             top: 0;
+             left: 0;
+             bottom: 0;
+             right: 0;
+             text-align: center;
+         }
+         .score-text {
+             margin: auto;
+             position: absolute;
+             top: 0;
+             left: 0;
+             bottom: 0;
+             right: 0;
+             height: 1em;
+             line-height: 1em;
+             font-size: 1em;
+         }
+/*         .score-text {
+             height: 3vw;
+             line-height: 3vw;
+             font-size: 3vw;
+         }*/
+         .circle:hover {
+             outline: 0;
+             background-color: grey;
+         }
+
+
+         /* browse files, thanks to http://html5-demos.appspot.com/static/styled_file_input.html*/
+         input[type="file"].browse-input {
+             /* Note: display:none on the input won't trigger the click event in WebKit.
+               Setting visibility to hidden and width 0 works.*/
+             
+             visibility: hidden;
+             width: 0;
+             height: 0;
+         }
+
+         #uploader{
+            width: 10%;
+            height: 10%;
+         }
+
+
+    </style>
+
+</head>
+<body>
+
+    <div id="uploader">
+        <input type="file" class="browse-input" multiple>  
+        <div class="drop browse-button">
+            Drag here or click to browse
+        </div>
+    </div>
+    <script type="text/javascript">
+
+ function handleFiles(e) {
+        // console.log(e,this)
+        e.stopPropagation();
+        e.preventDefault();
+        // d3.select('#files div').remove();
+
+        var drop = false;
+        var files = e.target.files; // for browse
+        if (! files) {
+            var files = e.dataTransfer.files; // for drag/drop
+            drop = true;
+            console.log('drop', drop);
+        }
+
+        // just deal with first file
+        var r = new FileReader();
+        r.onload = function(e){
+            console.log(e.target.result);
+        }
+        r.readAsText(files[0]);
+    }
+
+
+    // select files by browsing or ....
+    // ======================================
+
+
+    var browse_inputs = document.getElementsByClassName('browse-input');
+    for (var i = 0; i < browse_inputs.length; i++) {
+        if (browse_inputs[i].addEventListener) browse_inputs[i].addEventListener('change', handleFiles, false);
+    };
+
+    var browse_buttons = document.getElementsByClassName('browse-button');
+    for (var i = 0; i < browse_buttons.length; i++) {
+        browse_buttons[i].addEventListener('click', function(e,b,c){
+            // e.target == this
+            this.parentNode.getElementsByClassName('browse-input')[0].click();
+            // browse_buttons[i].previousSibling.previousSibling.click()
+        }, false);
+    };
+
+    // ... drag and drop
+    // ======================================
+
+    function handleDragover(e) {
+        e.stopPropagation();
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'copy';
+    }
+
+    var drop_divs = document.getElementsByClassName('drop');
+    for (var i = 0; i < drop_divs.length; i++) {
+        if(drop_divs[i].addEventListener) {
+            drop_divs[i].addEventListener('dragenter', handleDragover, false);
+            drop_divs[i].addEventListener('dragover', handleDragover, false);
+            drop_divs[i].addEventListener('drop', handleFiles, false);
+        }
+    };
+
+    </script>
+
+</body>
+</html>

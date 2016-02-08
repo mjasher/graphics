@@ -1,0 +1,24 @@
+body {
+  background: #222;
+  color: #eee;
+  font: 14px "Helvetica Neue", Helvetica, Arial, sans-serif;
+  margin: 8px;
+}
+circle {
+  stroke-width: 1px;
+  stroke: #111;
+  stroke-opacity: 0.5;
+}
+#chart {
+  width: 500px;
+  height: 400px;
+  background: #151515;
+  border-radius: 4px;
+  border: 1px solid #333;
+  float: left;
+  clear: left;
+}
+#controls {
+  float: left;
+  margin: 0 20px;
+}

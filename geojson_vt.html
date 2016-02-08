@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset='utf-8' />
+    <title>
+        Preview
+    </title>
+    <link rel="stylesheet" href="third/leaflet.0.7.7.css" />
+    <!--[if lte IE 8]>
+            <link rel="stylesheet" href="http://cdn.leafletjs.com/leaflet-0.6.4/leaflet.ie.css" />
+        <![endif]-->
+    <style>
+    html {
+        height: 100%
+    }
+    
+    body {
+        height: 100%;
+        margin: 0;
+        padding: 0;
+    }
+    
+    #map {
+        height: 90%
+    }
+    </style>
+</head>
+
+<body>
+    <div id="uploader">
+        <input type="file" class="browse-input" multiple>
+        <div class="drop browse-button">
+            Drag here or click to browse
+            <!-- <button class="browse-button">Click to browse</button> -->
+        </div>
+    </div>
+    <div id="map"></div>
+    <script src="third/leaflet.0.7.7.js"></script>
+    <script src="third/d3.v3.min.js"></script>
+    <script src="uploader.js"></script>
+    <script src="third/L.CanvasTiles.js"></script>
+    <script src="third/geojson-vt.js"></script>
+    <script>
+    var map = L.map('map')
+        // .addLayer(mapboxTiles)
+        .setView([42.0347, -93.6200], 8);
+
+
+    var layer_control = L.control.layers().addTo(map);
+
+
+    var mapbox_token = "pk.eyJ1IjoibWphc2hlciIsImEiOiJjaWk5MXdqNXUwMG80dGptMzMwNHZoZjVtIn0.MN7wrrb_5l53AttIFKgx1g";
+
+    // Replace 'mapbox.streets' with your map id.
+    var mapboxTiles = L.tileLayer('https://api.mapbox.com/v4/mapbox.satellite/{z}/{x}/{y}.png?access_token=' + mapbox_token, {
+        attribution: '<a href="http://www.mapbox.com/about/maps/" target="_blank">Terms &amp; Feedback</a>'
+    });
+    mapboxTiles.addTo(map);
+    layer_control.addBaseLayer(mapboxTiles, 'mapboxTiles');
+
+    // var onEachFeature = function(feature, layer) {
+    //     if (feature.properties) {
+    //         layer.bindPopup(Object.keys(feature.properties).map(function(k) {
+    //             return k + ": " + feature.properties[k];
+    //         }).join("<br />"), {
+    //             maxHeight: 200
+    //         });
+    //     }
+    // }
+
+
+    //-------------------------------------------------
+
+    var tileOptions = {
+        maxZoom: 20, // max zoom to preserve detail on
+        tolerance: 5, // simplification tolerance (higher means simpler)
+        extent: 4096, // tile extent (both width and height)
+        buffer: 64, // tile buffer on each side
+        debug: 0, // logging level (0 to disable, 1 or 2)
+
+        indexMaxZoom: 0, // max zoom in the initial tile index
+        indexMaxPoints: 100000, // max number of points per tile in the index
+    };
+
+    function colorizeFeatures(data) {
+        var counter = 0;
+        for (var i = 0; i < data.features.length; i++) {
+            data.features[i].properties.color = 'hsla(' + 360 * Math.random() + ', 50%, 50%, 0.5)';
+            counter += data.features[i].geometry.coordinates[0].length;
+        }
+        return counter;
+    }
+
+
+    // http://bl.ocks.org/sumbera/c67e5551b21c68dc8299
+
+    var tileIndex;
+
+    function tiled_geojson(raw) {
+        var data = JSON.parse(raw);
+        colorizeFeatures(data);
+
+        tileIndex = geojsonvt(data, tileOptions);
+        var tileLayer = L.canvasTiles()
+            .params({
+                debug: false,
+                padding: 5
+            })
+            .drawing(drawingOnCanvas)
+
+        layer_control.addOverlay(tileLayer, 'tileLayer');
+        tileLayer.addTo(map);
+        tileLayer.redraw();
+
+    }
+
+
+    function drawingOnCanvas(canvasOverlay, params) {
+        var pad = 0;
+
+        var bounds = params.bounds;
+        params.tilePoint.z = params.zoom;
+
+        var ctx = params.canvas.getContext('2d');
+        ctx.globalCompositeOperation = 'source-over';
+
+
+        // console.log('getting tile z' + params.tilePoint.z + '-' + params.tilePoint.x + '-' + params.tilePoint.y);
+
+        var tile = tileIndex.getTile(params.tilePoint.z, params.tilePoint.x, params.tilePoint.y);
+        if (!tile) {
+            // console.log('tile empty');
+            return;
+        }
+
+        ctx.clearRect(0, 0, params.canvas.width, params.canvas.height);
+
+        var features = tile.features;
+
+        ctx.strokeStyle = 'grey';
+
+        for (var i = 0; i < features.length; i++) {
+            var feature = features[i],
+                type = feature.type;
+
+            ctx.fillStyle = feature.tags.color ? feature.tags.color : 'rgba(255,0,0,0.05)';
+            ctx.beginPath();
+
+            for (var j = 0; j < feature.geometry.length; j++) {
+                var geom = feature.geometry[j];
+
+                if (type === 1) {
+                    ctx.arc(geom[0] * ratio + pad, geom[1] * ratio + pad, 2, 0, 2 * Math.PI, false);
+                    continue;
+                }
+
+                for (var k = 0; k < geom.length; k++) {
+                    var p = geom[k];
+                    var extent = 4096;
+
+                    var x = p[0] / extent * 256;
+                    var y = p[1] / extent * 256;
+                    if (k) ctx.lineTo(x + pad, y + pad);
+                    else ctx.moveTo(x + pad, y + pad);
+                }
+            }
+
+            if (type === 3 || type === 1) ctx.fill('evenodd');
+            ctx.stroke();
+        }
+
+    };
+
+
+    uploader(tiled_geojson);
+
+    </script>
+</body>
+
+</html>

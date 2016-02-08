@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<style>
+body {
+    font: 10px sans-serif;
+}
+
+.axis path,
+.axis line {
+    fill: none;
+    stroke: #000;
+    shape-rendering: crispEdges;
+}
+
+.tooltip {
+    position: absolute;
+    width: 200px;
+    height: 28px;
+    pointer-events: none;
+}
+
+.col {
+    /*float: left;*/
+    display: inline-block;
+    margin: 2px;
+    padding: 2px;
+    border: 1px solid lightsteelblue;
+}
+
+.col.active {
+    border: 3px solid steelblue;
+}
+</style>
+
+<body>
+    <div id="uploader">
+        <input type="file" class="browse-input" multiple>
+        <div class="drop browse-button">
+            Drag here or click to browse
+            <!-- <button class="browse-button">Click to browse</button> -->
+        </div>
+    </div>
+    X
+    <div id="xcols"></div>
+    Y
+    <div id="ycols"></div>
+    <div id="chart"></div>
+    <script src="third/d3.v3.min.js"></script>
+    <script src="third/colorbrewer.js"></script>
+    <script src="uploader.js"></script>
+    <script src="third/pearson_correlation.js"></script>
+    <script>
+    function scatter(el, data, xcol, ycol, ccol, ttipcol) {
+        d3.selectAll(el.node().childNodes).remove();
+
+        var margin = {
+                top: 30,
+                right: 30,
+                bottom: 30,
+                left: 30
+            },
+            width = 700 - margin.left - margin.right,
+            height = 700 - margin.top - margin.bottom;
+
+        var x = d3.scale.linear()
+            .range([0, width]);
+
+        var y = d3.scale.linear()
+            .range([height, 0]);
+
+        var color = d3.scale.category20();
+
+        var xAxis = d3.svg.axis()
+            .scale(x)
+            .orient("bottom");
+
+        var yAxis = d3.svg.axis()
+            .scale(y)
+            .orient("left");
+
+        var svg = el.append("svg")
+            .attr("width", width + margin.left + margin.right)
+            .attr("height", height + margin.top + margin.bottom)
+            .append("g")
+            .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+        var tooltip = el.append("div")
+            .attr("class", "tooltip")
+            .style("opacity", 0);
+
+        // data
+
+        x.domain(d3.extent(data, function(d) {
+            return d[xcol];
+        })).nice();
+        y.domain(d3.extent(data, function(d) {
+            return d[ycol];
+        })).nice();
+
+        svg.append("g")
+            .attr("class", "x axis")
+            .attr("transform", "translate(0," + height + ")")
+            .call(xAxis)
+            .append("text")
+            .attr("class", "label")
+            .attr("x", width)
+            .attr("y", -6)
+            .style("text-anchor", "end")
+            .text(xcol);
+
+        svg.append("g")
+            .attr("class", "y axis")
+            .call(yAxis)
+            .append("text")
+            .attr("class", "label")
+            .attr("transform", "rotate(-90)")
+            .attr("y", 6)
+            .attr("dy", ".71em")
+            .style("text-anchor", "end")
+            .text(ycol)
+
+        svg.selectAll(".dot")
+            .data(data)
+            .enter().append("circle")
+            .attr("class", "dot")
+            .attr("r", 3.5)
+            .attr("cx", function(d) {
+                return x(d[xcol]);
+            })
+            .attr("cy", function(d) {
+                return y(d[ycol]);
+            })
+            .style("fill", function(d) {
+                return color(d[ccol]);
+            })
+            .style("fill-opacity", 0.5)
+            .on("mouseover", function(d) {
+                d3.select(this).style('stroke', '#000');
+                tooltip.transition()
+                    .duration(200)
+                    .style("opacity", .9);
+                tooltip.html(d[ttipcol] + "<br/> (" + d[xcol] + ", " + d[ycol] + ")")
+                    .style("left", (d3.event.pageX + 5) + "px")
+                    .style("top", (d3.event.pageY - 28) + "px");
+            })
+            .on("mouseout", function(d) {
+                d3.select(this).style('stroke', 'none');
+                tooltip.transition()
+                    .duration(500)
+                    .style("opacity", 0);
+            });
+
+
+        var legend = svg.selectAll(".legend")
+            .data(color.domain())
+            .enter().append("g")
+            .attr("class", "legend")
+            .attr("transform", function(d, i) {
+                return "translate(0," + i * 10 + ")";
+            });
+
+        legend.append("rect")
+            .attr("x", width - 9)
+            .attr("width", 9)
+            .attr("height", 9)
+            .style("fill-opacity", 0.5)
+            .style("fill", color);
+
+        legend.append("text")
+            .attr("x", width - 24)
+            .attr("y", 5)
+            .attr("dy", ".35em")
+            .style("text-anchor", "end")
+            .text(function(d) {
+                return d;
+            });
+
+    }
+
+
+
+    uploader(function(raw_data) {
+        var data = d3.csv.parse(raw_data);
+        console.log(data);
+
+        var cols = Object.keys(data[0]);
+
+        data.forEach(function(d) {
+            // d[ccol] = d[ccol].replace(/\D/g,'');
+            cols.forEach(function(col) {
+                if (!isNaN(d[col])) d[col] = +d[col];
+            });
+        });
+
+        // TODO makes these first 4 cols by default, then editable
+
+        var xcol = 'sepal width';
+        var ycol = 'sepal length';
+        var ccol = 'species';
+        var ttipcol = 'species';
+
+        var corr_color = d3.scale.quantile().domain([-1.0, 1.0]).range(colorbrewer.Reds[9]);
+
+        function plot() {
+            xcols.classed('active', function(d) {
+                return d == xcol;
+            });
+            ycols.classed('active', function(d) {
+                return d == ycol;
+            });
+
+            ycols.style('background-color', function(d) {
+                var corr = pearson_correlation(data.map(function(r) {
+                    return r[d];
+                }), data.map(function(r) {
+                    return r[xcol];
+                }));
+                return corr_color(corr);
+            });
+
+            scatter(d3.select('#chart'), data, xcol, ycol, ccol, ttipcol);
+        }
+
+        var xcols = d3.select('#xcols')
+            .selectAll('.col')
+            .data(cols)
+            .enter()
+            .append('div')
+            .attr('class', 'col')
+            .html(function(d) {
+                return d;
+            })
+            .on('click', function(d) {
+                xcol = d;
+                plot();
+            });
+
+        var ycols = d3.select('#ycols')
+            .selectAll('.col')
+            .data(cols)
+            .enter()
+            .append('div')
+            .attr('class', 'col')
+            .html(function(d) {
+                return d;
+            })
+            .on('click', function(d) {
+                ycol = d;
+                plot();
+            });
+
+        plot();
+
+
+
+    })
+
+    // d3.csv("/files/strip_trials.csv", function(error, data) {
+    // });
+    </script>
