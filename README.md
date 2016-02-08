@@ -5,3 +5,7 @@ I'm constantly oscillating between
 and
 > The elegance and flexibility of the D3 API are unparalleled. 
 Here's a budding collection of my 'generic' D3 templates I use when I'm favoring the latter.
+
+git filter-branch --force --index-filter \
+'git rm --cached --ignore-unmatch demo_data/flowers.csv' \
+--prune-empty --tag-name-filter cat -- --all
