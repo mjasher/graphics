@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<title></title>
+<link rel="stylesheet" href="third/leaflet.0.7.7.css" />
+<style>
+
+html,
+body,
+#map{
+    padding: 0;
+    border: 0;
+    margin: 0;
+    width: 100%;
+    height: 100%;
+}
+
+</style>
+
+<body>
+    <div id="uploader">
+        <input type="file" class="browse-input" multiple>
+        <div class="drop browse-button">
+            Drag here or click to browse
+            <!-- <button class="browse-button">Click to browse</button> -->
+        </div>
+    </div>
+    <div id="map"></div>
+</body>
+<svg width="960" height="1060"></svg>
+<script src="third/leaflet.0.7.7.js"></script>
+<script src="third/d3.v3.min.js"></script>
+<script src="third/L.CanvasOverlay.js"></script>
+<script src="uploader.js"></script>
+<script>
+/*
+             base map
+*/
+
+var map = L.map("map").setView([42, -93], 15);
+var layer_control = L.control.layers().addTo(map);
+
+var fl_mapbox_token = "pk.eyJ1IjoiZmFybWxvZ3MiLCJhIjoiVnJZSUIwWSJ9.XSJYFLurKX_qxVQ1-iCqBA";
+
+['mapbox.satellite', 'mapbox.streets', 'mapbox.landsat-live'].forEach(function(layer_name, i) {
+
+    var mapboxLayer = L.tileLayer('https://api.mapbox.com/v4/' + layer_name + '/{z}/{x}/{y}.png?access_token=' + fl_mapbox_token, {
+        attribution: '<a href="http://www.mapbox.com/about/maps/" target="_blank">Terms &amp; Feedback</a>'
+    });
+    layer_control.addBaseLayer(mapboxLayer, layer_name);
+
+    if (i === 0) mapboxLayer.addTo(map);
+});
+
+layer_control.addBaseLayer(L.tileLayer("http://{s}.sm.mapstack.stamen.com/(toner-lite,$fff[difference],$fff[@23],$fff[hsl-saturation@20])/{z}/{x}/{y}.png"), "Stamen's toner-lite");
+
+L.control.scale().addTo(map);
+
+
+function add_geojson_layer(field_geom, name){
+    var geojson_layer = L.geoJson(field_geom, {onEachFeature: onEachFeature});
+    layer_control.addOverlay(geojson_layer, name);
+    var centroid = d3.geo.centroid(field_geom);
+    layer_control._map.setView([centroid[1], centroid[0]], 15)
+}
+
+
+function add_png_layer(image){
+    console.log(image)
+    var raster = L.imageOverlay("data:image/png;base64," +image['base64'], image['bounds']).addTo(map).bringToBack();
+    layer_control.addOverlay(raster, 'raster');
+}
+
+
+var prop
+
+
+function add_canvas_layer(collection, name){
+       if (prop == undefined) prop = Object.keys(collection['features'][0]['properties'])[0]
+
+        if (collection['features'][0]['geometry']['type'] == 'MultiPoint'){
+            var multipoint_yield = collection['features'][0]
+
+            var points = [];
+            for (var i = 0; i < multipoint_yield['geometry']['coordinates'].length; i++) {
+                points.push({
+                    "Longitude": multipoint_yield['geometry']['coordinates'][i][0],
+                    "Latitude": multipoint_yield['geometry']['coordinates'][i][1],
+                    "Color": multipoint_yield['properties'][prop][i],
+                })
+            }
+        }
+        else if (collection['features'][0]['geometry']['type'] == 'Point'){
+
+            var points = [];
+            for (var i = 0; i < collection['features'].length; i++) {
+                points.push({
+                    "Longitude": collection['features'][i]['geometry']['coordinates'][0],
+                    "Latitude": collection['features'][i]['geometry']['coordinates'][1],
+                    "Color": collection['features'][i]['properties'][prop],
+                })
+            }
+        }   
+
+        var values = points.map(function(d){ return d['Color']; });
+        values.sort();
+         var color = d3.scale.quantile()
+            .domain([values[Math.round(values.length / 10)], values[Math.round(9 * values.length / 10)]])
+            .range([
+                "rgba(165, 0, 38, 0.5)",
+                "rgba(215, 48, 39, 0.5)",
+                "rgba(244, 109, 67, 0.5)",
+                "rgba(253, 174, 97, 0.5)",
+                "rgba(254, 224, 139, 0.5)",
+                "rgba(255, 255, 191, 0.5)",
+                "rgba(217, 239, 139, 0.5)",
+                "rgba(166, 217, 106, 0.5)",
+                "rgba(102, 189, 99, 0.5)",
+                "rgba(26, 152, 80, 0.5)",
+                "rgba(0, 104, 55, 0.5)"
+            ]);
+
+        add_point_layer(layer_control, points, color, name);
+    }
+
+
+
+// function post(url, data, callback){
+//     d3.xhr(url)
+//     .header("Content-Type", "application/json")
+//     .post(JSON.stringify(data),
+//         function(err, request) {
+//             if (err != undefined) {
+//                 document.write(err.response);
+//                 document.close();
+//             }
+//             callback(JSON.parse(request.response));
+
+//         });
+// }
+
+
+
+function drawingOnCanvas(canvasOverlay, params) {
+    var points = canvasOverlay.options['points'];
+    var ctx = params.canvas.getContext('2d');
+    ctx.clearRect(0, 0, params.canvas.width, params.canvas.height);
+    // ctx.fillStyle = "rgba(255,116,0, 0.5)";
+    for (var i = 0; i < points.length; i++) {
+        var d = points[i];
+        if (params.bounds.contains([d['Latitude'], d['Longitude']])) {
+            var dot = canvasOverlay._map.latLngToContainerPoint([d['Latitude'], d['Longitude']]); // lat, lon
+            ctx.beginPath();
+            if (i == canvasOverlay.options['chosen_i']) {
+                ctx.fillStyle = 'rgba(0,0,0,1)';
+                ctx.arc(dot.x, dot.y, Math.max(canvasOverlay._map.getZoom() - 10, 5), 0, Math.PI * 2);
+                console.log('chosen', d['Color'])
+            }
+            else {
+                ctx.fillStyle = canvasOverlay.options['color'](d['Color']);
+                ctx.arc(dot.x, dot.y, Math.max(canvasOverlay._map.getZoom() - 12, 3), 0, Math.PI * 2);
+            }
+            ctx.fill();
+            ctx.closePath();
+        }
+    }
+};
+
+
+var onEachFeature = function(feature, layer) {
+    if (feature.properties) {
+        layer.bindPopup(Object.keys(feature.properties).map(function(k) {
+            return k + ": " + feature.properties[k];
+        }).join("<br />"), {
+            maxHeight: 200
+        });
+    }
+}
+
+
+function add_point_layer(layer_control, points, color, name) {
+    /*
+             canvas points
+    */
+
+    var canas_overlay = L.canvasOverlay(drawingOnCanvas, {
+        points: points,
+        color: color
+    });
+
+    layer_control.addOverlay(canas_overlay, name);
+    canas_overlay.addTo(layer_control._map);
+
+    map.on('click', function(e) {
+    // map.on('mousemove', function(e) {
+        /*
+          arg min
+        */
+        var min = Infinity;
+        var min_i;
+        var dist;
+        for (var i = 0; i < points.length; i++) {
+            var d = points[i];
+            dist = Math.pow(d['Longitude'] - e.latlng['lng'], 2) + Math.pow(d['Latitude'] - e.latlng['lat'], 2);
+            if (dist < min) {
+                min = dist;
+                min_i = i;
+            }
+        }
+        canas_overlay.options['chosen_i'] = min_i;
+        canas_overlay.redraw();
+    });
+}
+
+
+uploader((raw, names) => {
+    console.log(names[0])
+        var data = JSON.parse(raw);
+        if (data['features'][0]['geometry']['type'] == 'Polygon') add_geojson_layer(data, names[0].name)
+        else add_canvas_layer(data, names[0].name)
+        
+    })
+
+
+</script>
