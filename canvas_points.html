@@ -100,6 +100,9 @@ function add_canvas_layer(collection, name){
                 })
             }
         }   
+        
+        var centroid = d3.geo.centroid(collection);
+        layer_control._map.setView([centroid[1], centroid[0]], 15)
 
         var values = points.map(function(d){ return d['Color']; });
         values.sort();
@@ -153,7 +156,7 @@ function drawingOnCanvas(canvasOverlay, params) {
             if (i == canvasOverlay.options['chosen_i']) {
                 ctx.fillStyle = 'rgba(0,0,0,1)';
                 ctx.arc(dot.x, dot.y, Math.max(canvasOverlay._map.getZoom() - 10, 5), 0, Math.PI * 2);
-                console.log('chosen', d['Color'])
+                console.log('chosen', i, d['Color'])
             }
             else {
                 ctx.fillStyle = canvasOverlay.options['color'](d['Color']);
