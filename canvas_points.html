@@ -104,23 +104,16 @@ function add_canvas_layer(collection, name){
         var centroid = d3.geo.centroid(collection);
         layer_control._map.setView([centroid[1], centroid[0]], 15)
 
+        var blues = ["#fff7fb", "#ece7f2", "#d0d1e6", "#a6bddb", "#74a9cf", "#3690c0", "#0570b0", "#045a8d", "#023858"];
+        var RdYlGns = ["#a50026","#d73027","#f46d43","#fdae61","#fee08b","#ffffbf","#d9ef8b","#a6d96a","#66bd63","#1a9850","#006837"]
+
+
         var values = points.map(function(d){ return d['Color']; });
         values.sort();
          var color = d3.scale.quantile()
-            .domain([values[Math.round(values.length / 10)], values[Math.round(9 * values.length / 10)]])
-            .range([
-                "rgba(165, 0, 38, 0.5)",
-                "rgba(215, 48, 39, 0.5)",
-                "rgba(244, 109, 67, 0.5)",
-                "rgba(253, 174, 97, 0.5)",
-                "rgba(254, 224, 139, 0.5)",
-                "rgba(255, 255, 191, 0.5)",
-                "rgba(217, 239, 139, 0.5)",
-                "rgba(166, 217, 106, 0.5)",
-                "rgba(102, 189, 99, 0.5)",
-                "rgba(26, 152, 80, 0.5)",
-                "rgba(0, 104, 55, 0.5)"
-            ]);
+            // .domain([values[Math.round(values.length / 10)], values[Math.round(9 * values.length / 10)]])
+            .domain(d3.extent(values))
+            .range(RdYlGns);
 
         add_point_layer(layer_control, points, color, name);
     }

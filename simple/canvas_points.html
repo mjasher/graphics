@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title></title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <!-- <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css" rel="stylesheet"> -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.0.1/dist/leaflet.css" />
+    <style>
+    html,
+    body,
+    #map>div {
+        width: 100%;
+        height: 100%;
+        padding: 0;
+        margin: 0;
+    }
+    
+    #map {
+        width: 80%;
+        height: 100%;
+    }
+    
+    #legend {
+        width: 20%;
+        height: 100%;
+    }
+    
+    body {
+        display: flex;
+        flex-wrap: wrap;
+    }
+    /* legend */
+    
+    .square {
+        width: 18px;
+        height: 18px;
+        float: left;
+        margin-right: 8px;
+        opacity: 0.7;
+    }
+    
+    select {
+        font-size: 22px;
+        height: 30px;
+        border: none;
+        margin: 0.3em;
+        background: none;
+    }
+    </style>
+</head>
+
+<body>
+    <div id="map"></div>
+    <div id="legend"></div>
+    <script src="https://unpkg.com/d3@4.4.0/build/d3.min.js"></script>
+    <script src="https://unpkg.com/leaflet@1.0.1/dist/leaflet.js"></script>
+    <script src="/third/L.CanvasLayer.js"></script>
+    <script>
+    var model = {
+        layer: undefined,
+        prop: undefined,
+        center: undefined,
+        zoom: undefined,
+    }
+
+    d3.request('/demo_data/' + getParameterByName('f'))
+        .header("Content-Type", "application/json")
+        .get(null, function(err, rawData) {
+            var layer = JSON.parse(rawData.response)
+            var centroid = d3.geoCentroid(layer);
+            model.center = [centroid[1], centroid[0]]
+            model.zoom = 16
+            model.layer = layer
+            model.prop = Object.keys(layer['features'][0]['properties'])[0]
+
+            render_map()
+        });
+
+
+    var map_el = document.querySelector('#map')
+    var legend_el = document.querySelector('#legend')
+
+    function render_map() {
+        map_el.innerHTML = ''
+        var inner_map_el = document.createElement('div')
+        map_el.appendChild(inner_map_el)
+        var map = L.map(inner_map_el);
+
+
+        map.on('moveend', function(e) {
+            model.zoom = map.getZoom()
+            model.center = map.getCenter()
+        });
+
+        map.on('load', e => {
+            var {
+                _southWest,
+                _northEast
+            } = map.getBounds()
+            console.log(_southWest, _northEast)
+            var features = model.layer['features'].filter(f =>
+                _southWest.lat <= f['geometry']['coordinates'][1] && f['geometry']['coordinates'][1] <= _northEast.lat && _southWest.lng <= f['geometry']['coordinates'][0] && f['geometry']['coordinates'][0] <= _northEast.lng
+            )
+            // var features = model.layer['features']
+            L.tileLayer("https://{s}.tiles.mapbox.com/v4/mapbox.light/{z}/{x}/{y}@2x.png?access_token=pk.eyJ1IjoiZmFybWxvZ3MiLCJhIjoiVnJZSUIwWSJ9.XSJYFLurKX_qxVQ1-iCqBA").addTo(map);
+            L.control.scale().addTo(map);
+
+            var color = get_color(features, model.prop)
+            add_canvas_layer(map, features, color, model.prop)
+            add_legend(legend_el, features, color, model.prop)
+
+        })
+
+        map.setMaxZoom(100)
+        map.setView(model.center, model.zoom)
+
+
+
+
+    }
+
+    function getParameterByName(name, url) {
+        if (!url) {
+            url = window.location.href;
+        }
+        name = name.replace(/[\[\]]/g, "\\$&");
+        var regex = new RegExp("[?&]" + name + "(=([^&#]*)|&|#|$)"),
+            results = regex.exec(url);
+        if (!results) return null;
+        if (!results[2]) return '';
+        return decodeURIComponent(results[2].replace(/\+/g, " "));
+    }
+
+
+
+    function get_color(points, prop) {
+        var values = points.map(d => d['properties'][prop]).filter(d => !isNaN(d))
+
+        if (values.length < 0.5 * points.length) {
+            var color = d3.scaleOrdinal(d3.schemeCategory10)
+            color.unknown(d3.scaleImplicit)
+            return color
+        }
+
+        values.sort();
+
+        // var Blues = ["#fff7fb", "#ece7f2", "#d0d1e6", "#a6bddb", "#74a9cf", "#3690c0", "#0570b0", "#045a8d", "#023858"];
+        var RdYlGn = ["#a50026", "#d73027", "#f46d43", "#fdae61", "#fee08b", "#ffffbf", "#d9ef8b", "#a6d96a", "#66bd63", "#1a9850", "#006837"]
+
+        // var color = (v) => norm_color((v - color_min) / (color_max - color_min))
+        var shades = RdYlGn
+        var quantiles = shades.map((s, i) => d3.quantile(values, i / (shades.length - 1)))
+
+        var color = d3.scaleQuantile()
+            .domain(quantiles)
+            .range(RdYlGn)
+
+        return color
+    }
+
+    function onDrawLayer(info) {
+        var c;
+        var points = info.layer.options['points'];
+        var prop = info.layer.options['prop'];
+        var ctx = info.canvas.getContext('2d');
+        ctx.clearRect(0, 0, info.canvas.width, info.canvas.height);
+        for (var point_i = 0; point_i < points.length; point_i++) {
+            if (info.bounds.contains([points[point_i]['geometry']['coordinates'][1], points[point_i]['geometry']['coordinates'][0]])) {
+                var dot = info.layer._map.latLngToContainerPoint([points[point_i]['geometry']['coordinates'][1], points[point_i]['geometry']['coordinates'][0]]); // lat, lon
+                ctx.beginPath();
+                if (point_i == info.layer.options['chosen_i']) {
+                    ctx.fillStyle = 'rgba(0, 0, 0, 1)';
+                    ctx.arc(dot.x, dot.y, Math.max(info.layer._map.getZoom() - 10, 5), 0, Math.PI * 2);
+                } else {
+                    c = info.layer.options['color'](points[point_i]['properties'][prop])
+                    if (c == undefined) c = 'rgba(0, 0, 0, 0.2)'
+                    ctx.fillStyle = c;
+                    ctx.arc(dot.x, dot.y, Math.max(info.layer._map.getZoom() - 12, 3), 0, Math.PI * 2);
+                }
+                ctx.fill();
+                ctx.closePath();
+            }
+        }
+    }
+
+    function add_canvas_layer(leafletMap, features, color, prop) {
+
+        var canvas_overlay = new L.CanvasLayer({
+                points: features,
+                prop: prop,
+                color: color
+            })
+            .delegate({
+                onDrawLayer: onDrawLayer
+            })
+            .addTo(leafletMap)
+            // -- if we do not inherit from L.CanvasLayer we can setup a delegate to receive events from L.CanvasLayer
+
+        leafletMap.on('click', function(e) {
+            /* arg min */
+            var min = Infinity;
+            var min_i;
+            var dist;
+            for (var i = 0; i < features.length; i++) {
+                dist = Math.pow(features[i]['geometry']['coordinates'][0] - e.latlng['lng'], 2) + Math.pow(features[i]['geometry']['coordinates'][1] - e.latlng['lat'], 2);
+                if (dist < min) {
+                    min = dist;
+                    min_i = i;
+                }
+            }
+            console.log('clicked:', min_i, features[min_i]['properties'][prop], features[min_i]['properties'])
+            canvas_overlay.options['chosen_i'] = min_i;
+            canvas_overlay.needRedraw();
+        });
+
+        return canvas_overlay
+
+    }
+
+    function add_legend(div, features, color, prop) {
+        var props = Object.keys(features[0]['properties'])
+        var format = d3.format(".1f")
+
+        if (color.hasOwnProperty('invertExtent')) {
+            var labels = [];
+            var color_range = color.range()
+            for (var i = 0; i < color_range.length; i++) {
+                var extent = color.invertExtent(color_range[i]);
+                labels.push(
+                    `<span class="square" style="background: ${color_range[i]};"></span>
+                                    ${format(+extent[0])} - ${format(+extent[1])}`
+                )
+            }
+        } else {
+            var labels = d3.set(features.map(d => d['properties'][prop])).values()
+                .map(v => `<span class="square" style="background: ${color(v)};"></span> ${v}`).slice(0, 20) // don't have too many ie. >20
+        }
+        div.innerHTML = `
+            <select id="prop"> ${props.map(p => `
+                    <option ${p === prop ? 'selected' : ''} value="${p}">${p}</option>
+            `).join('')} </select>
+            <br />
+            ${labels.join('<br>')}
+    `
+
+    var select_el = document.querySelector('#prop')
+    select_el.addEventListener('change', e => {
+        model.prop = e.target.value
+        render_map()
+    })
+}
+    </script>
+</body>
+
+</html>
