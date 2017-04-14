@@ -87,36 +87,20 @@
         map_el.appendChild(inner_map_el)
         var map = L.map(inner_map_el);
 
-
         map.on('moveend', function(e) {
             model.zoom = map.getZoom()
             model.center = map.getCenter()
         });
 
-        map.on('load', e => {
-            var {
-                _southWest,
-                _northEast
-            } = map.getBounds()
-            console.log(_southWest, _northEast)
-            var features = model.layer['features'].filter(f =>
-                _southWest.lat <= f['geometry']['coordinates'][1] && f['geometry']['coordinates'][1] <= _northEast.lat && _southWest.lng <= f['geometry']['coordinates'][0] && f['geometry']['coordinates'][0] <= _northEast.lng
-            )
-            // var features = model.layer['features']
-            L.tileLayer("https://{s}.tiles.mapbox.com/v4/mapbox.light/{z}/{x}/{y}@2x.png?access_token=pk.eyJ1IjoiZmFybWxvZ3MiLCJhIjoiVnJZSUIwWSJ9.XSJYFLurKX_qxVQ1-iCqBA").addTo(map);
-            L.control.scale().addTo(map);
+        L.tileLayer("https://{s}.tiles.mapbox.com/v4/mapbox.light/{z}/{x}/{y}@2x.png?access_token=pk.eyJ1IjoiZmFybWxvZ3MiLCJhIjoiVnJZSUIwWSJ9.XSJYFLurKX_qxVQ1-iCqBA").addTo(map);
+        L.control.scale().addTo(map);
 
-            var color = get_color(features, model.prop)
-            add_canvas_layer(map, features, color, model.prop)
-            add_legend(legend_el, features, color, model.prop)
-
-        })
+        var color = get_color(model.layer['features'], model.prop)
+        add_canvas_layer(map, model.layer['features'], color, model.prop)
+        add_legend(legend_el, model.layer['features'], color, model.prop)
 
         map.setMaxZoom(100)
         map.setView(model.center, model.zoom)
-
-
-
 
     }
 
